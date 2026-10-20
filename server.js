@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const { ethers } = require("ethers");
+const { assessRisk, calculatePositionNotional } = require("./risk-engine");
 
 const app = express();
 app.use(express.json({ limit: "16kb" }));
@@ -96,6 +97,26 @@ app.post("/api/transactions/preview", async (req, res) => {
     });
   } catch (error) {
     res.status(503).json({ ok: false, error: error.message || "Transaction preview failed." });
+  }
+});
+
+
+app.post("/api/paper/risk-check", (req, res) => {
+  try {
+    const { equity, peakEquity, dayStartEquity, proposedNotional, riskFraction, stopDistanceFraction } = req.body || {};
+    const result = assessRisk({ equity, peakEquity, dayStartEquity, proposedNotional });
+    const suggestedNotional =
+      Number.isFinite(riskFraction) && Number.isFinite(stopDistanceFraction)
+        ? calculatePositionNotional({ equity, riskFraction, stopDistanceFraction })
+        : null;
+    res.json({
+      ok: true,
+      ...result,
+      suggestedNotional,
+      message: "Simulation risk check only. No exchange order is created, signed, or broadcast."
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message || "Risk check failed." });
   }
 });
 
